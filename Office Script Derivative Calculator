@@ -1,0 +1,47 @@
+function main(workbook: ExcelScript.Workbook) {
+    let selected = workbook.getSelectedRange();
+
+    if (selected.getRowCount() !== 1 || selected.getColumnCount() !== 1) {
+        throw new Error("Please select a single cell before running this script.");
+    }
+
+    while (true) {
+        const cellUpperY = selected.getOffsetRange(1, -1);
+        const cellLowerY = selected.getOffsetRange(0, -1);
+        const cellUpperX = selected.getOffsetRange(1, -2);
+        const cellLowerX = selected.getOffsetRange(0, -2);
+
+        const rawY1 = cellUpperY.getValue();
+        const rawY0 = cellLowerY.getValue();
+        const rawX1 = cellUpperX.getValue();
+        const rawX0 = cellLowerX.getValue();
+
+        if (
+            rawY1 === null || rawY1 === "" ||
+            rawY0 === null || rawY0 === "" ||
+            rawX1 === null || rawX1 === "" ||
+            rawX0 === null || rawX0 === ""
+        ) {
+            break;
+        }
+
+        const y1 = Number(rawY1);
+        const y0 = Number(rawY0);
+        const x1 = Number(rawX1);
+        const x0 = Number(rawX0);
+
+        if (!isFinite(y1) || !isFinite(y0) || !isFinite(x1) || !isFinite(x0)) {
+            break;
+        }
+
+        if (x1 === x0) {
+            selected.setValue("DIV/0");
+            selected = selected.getOffsetRange(1, 0);
+            continue;
+        }
+
+        const slope = (y1 - y0) / (x1 - x0);
+        selected.setValue(slope);
+        selected = selected.getOffsetRange(1, 0);
+    }
+}
