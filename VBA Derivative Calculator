@@ -1,0 +1,70 @@
+Sub Derivative_Calculator()
+
+    Dim selected As Range
+    Set selected = Selection
+
+    ' Ensure only one cell is selected
+    If selected.Rows.Count <> 1 Or selected.Columns.Count <> 1 Then
+        MsgBox "Please select a single cell before running this macro."
+        Exit Sub
+    End If
+
+    Do While True
+        
+        Dim cellUpperY As Range
+        Dim cellLowerY As Range
+        Dim cellUpperX As Range
+        Dim cellLowerX As Range
+        
+        Set cellUpperY = selected.Offset(1, -1)
+        Set cellLowerY = selected.Offset(0, -1)
+        Set cellUpperX = selected.Offset(1, -2)
+        Set cellLowerX = selected.Offset(0, -2)
+        
+        Dim rawY1 As Variant, rawY0 As Variant
+        Dim rawX1 As Variant, rawX0 As Variant
+        
+        rawY1 = cellUpperY.Value
+        rawY0 = cellLowerY.Value
+        rawX1 = cellUpperX.Value
+        rawX0 = cellLowerX.Value
+        
+        ' Stop if any cell is empty
+        If IsEmpty(rawY1) Or IsEmpty(rawY0) Or _
+           IsEmpty(rawX1) Or IsEmpty(rawX0) Or _
+           rawY1 = "" Or rawY0 = "" Or _
+           rawX1 = "" Or rawX0 = "" Then
+            Exit Do
+        End If
+        
+        ' Stop if non-numeric
+        If Not IsNumeric(rawY1) Or Not IsNumeric(rawY0) Or _
+           Not IsNumeric(rawX1) Or Not IsNumeric(rawX0) Then
+            Exit Do
+        End If
+        
+        Dim y1 As Double, y0 As Double
+        Dim x1 As Double, x0 As Double
+        
+        y1 = CDbl(rawY1)
+        y0 = CDbl(rawY0)
+        x1 = CDbl(rawX1)
+        x0 = CDbl(rawX0)
+        
+        ' Handle divide-by-zero
+        If x1 = x0 Then
+            selected.Value = "DIV/0"
+            Set selected = selected.Offset(1, 0)
+            GoTo ContinueLoop
+        End If
+        
+        ' Compute slope
+        selected.Value = (y1 - y0) / (x1 - x0)
+        
+        ' Move down one row
+        Set selected = selected.Offset(1, 0)
+
+ContinueLoop:
+    Loop
+
+End Sub
