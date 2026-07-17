@@ -3,37 +3,44 @@ import importlib.util
 import subprocess
 import sys
 import time
+from pathlib import Path
+from datetime import datetime
+import re
+import shutil
+import threading
 
-
+import importlib.util
+import subprocess
+import sys
+import time
+from pathlib import Path
+from datetime import datetime
+import re
+import shutil
+import threading
 
 
 def ensure_package(import_name: str, pip_name: str | None = None) -> None:
-    """Install package if not already installed."""
-    if pip_name is None:
-        pip_name = import_name
-    if importlib.util.find_spec(import_name) is None:
-        print(f"Installing {pip_name}...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
-
-
+    """Install package if not already installed."""
+    if pip_name is None:
+        pip_name = import_name
+    if importlib.util.find_spec(import_name) is None:
+        print(f"Installing {pip_name}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
 
 
 # Install packages inline (runs every time, but only installs if missing)
 PACKAGES = [
-    ("tqdm", None),
-    ("dotenv", "python-dotenv"),
-    ("playwright", None),
-    ("requests", None),
-    ("bs4", "beautifulsoup4"),
-    ("keyboard", None),
+    ("tqdm", None),
+    ("dotenv", "python-dotenv"),
+    ("playwright", None),
+    ("requests", None),
+    ("bs4", "beautifulsoup4"),
+    ("keyboard", None),
 ]
 
-
-
 for import_name, pip_name in PACKAGES:
-    ensure_package(import_name, pip_name)
-
-
+    ensure_package(import_name, pip_name)
 
 # Install Playwright browsers if needed
 print("Checking Playwright browsers...")
@@ -41,19 +48,7 @@ subprocess.check_call([sys.executable, "-m", "playwright", "install"])
 print("✓ Dependencies ready")
 
 
-
-
 # --- Standard library imports ---
-import re
-import shutil
-import threading
-from pathlib import Path
-from datetime import datetime
-
-
-
-
-# --- Third-party imports ---
 from tqdm import tqdm
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
@@ -61,20 +56,12 @@ from tkinter import Tk, filedialog, simpledialog
 import keyboard
 
 
-
-
 # --- Config ---
 BASE_DIR = Path(__file__).resolve().parent
 env_path = BASE_DIR / ".env"
 load_dotenv(dotenv_path=env_path)
 
-
-
-
 EXCLUDE_KEYWORDS = ["photos", "video", "dadisp", "iddas", "das", "diadem"]
-
-
-
 
 # Global variables
 USERNAME = None
@@ -84,491 +71,493 @@ DOWNLOAD_DIR = None
 DATABASE_DIR = None
 
 
-
-
 def ask_credentials():
-    """Prompt user for login credentials."""
-    root = Tk()
-    root.withdraw()
-    email = simpledialog.askstring("Login", "Enter your email:")
-    if email is None:
-        root.destroy()
-        return None, None
-    password = simpledialog.askstring("Login", "Enter your password:", show="*")
-    root.destroy()
-    if password is None:
-        return None, None
-    return email, password
-
-
+    """Prompt user for login credentials."""
+    root = Tk()
+    root.withdraw()
+    email = simpledialog.askstring("Login", "Enter your email:")
+    if email is None:
+        root.destroy()
+        return None, None
+    password = simpledialog.askstring("Login", "Enter your password:", show="*")
+    root.destroy()
+    if password is None:
+        return None, None
+    return email, password
 
 
 def make_base_folder():
-    """Let user choose base save directory."""
-    root = Tk()
-    root.withdraw()
-    selected = filedialog.askdirectory(title="Choose where to save downloaded data")
-    root.destroy()
-    if not selected:
-        return None
-    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    folder = Path(selected) / f"Saved Data {ts}"
-    folder.mkdir(parents=True, exist_ok=True)
-    return folder
-
-
+    """Let user choose base save directory."""
+    root = Tk()
+    root.withdraw()
+    selected = filedialog.askdirectory(title="Choose where to save downloaded data")
+    root.destroy()
+    if not selected:
+        return None
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    folder = Path(selected) / f"Saved Data {ts}"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
 
 
 def initialize_paths():
-    """Initialize all global paths and credentials."""
-    global USERNAME, PASSWORD, BASE_SAVE_DIR, DOWNLOAD_DIR, DATABASE_DIR
-    
-    USERNAME, PASSWORD = ask_credentials()
-    if not USERNAME or not PASSWORD:
-        raise ValueError("Missing username or password")
-    
-    BASE_SAVE_DIR = make_base_folder()
-    if BASE_SAVE_DIR is None:
-        raise ValueError("No save folder selected")
-    
-    DOWNLOAD_DIR = BASE_SAVE_DIR / "downloads"
-    DATABASE_DIR = BASE_SAVE_DIR / "iihs_cache"
-    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    DATABASE_DIR.mkdir(parents=True, exist_ok=True)
+    """Initialize all global paths and credentials."""
+    global USERNAME, PASSWORD, BASE_SAVE_DIR, DOWNLOAD_DIR, DATABASE_DIR
 
+    USERNAME, PASSWORD = ask_credentials()
+    if not USERNAME or not PASSWORD:
+        raise ValueError("Missing username or password")
 
+    BASE_SAVE_DIR = make_base_folder()
+    if BASE_SAVE_DIR is None:
+        raise ValueError("No save folder selected")
+
+    DOWNLOAD_DIR = BASE_SAVE_DIR / "downloads"
+    DATABASE_DIR = BASE_SAVE_DIR / "iihs_cache"
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    DATABASE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def parse_test_title(raw_string: str):
-    """
-    Parse something like:
-    'Test SER1234: Vehicle Name ...'
-    -> ('SER1234', 'Vehicle Name ...')
-    """
-    match = re.search(r"Test\s+([A-Z0-9]+):\s+(.*)", raw_string or "")
-    if not match:
-        return None, None
-    return match.group(1), match.group(2).strip()
-
-
+    """
+    Parse something like:
+    'Test SER1234: Vehicle Name ...'
+    -> ('SER1234', 'Vehicle Name ...')
+    """
+    match = re.search(r"Test\s+([A-Z0-9]+):\s+(.*)", raw_string or "")
+    if not match:
+        return None, None
+    return match.group(1), match.group(2).strip()
 
 
 def save_download_from_click(page, click_target, save_dir: Path, timeout_ms: int = 120_000) -> Path:
-    """
-    Wrap a click in page.expect_download and save the file to save_dir.
-    """
-    save_dir.mkdir(parents=True, exist_ok=True)
-    
-    with page.expect_download(timeout=timeout_ms) as download_info:
-        click_target.click()
-    
-    download = download_info.value
-    save_path = save_dir / download.suggested_filename
-    download.save_as(str(save_path))
-    print(f"Saved: {save_path}")
-    return save_path
+    """
+    Wrap a click in page.expect_download and save the file to save_dir.
+    """
+    save_dir.mkdir(parents=True, exist_ok=True)
 
+    with page.expect_download(timeout=timeout_ms) as download_info:
+        click_target.click()
 
+    download = download_info.value
+    save_path = save_dir / download.suggested_filename
+    download.save_as(str(save_path))
+    print(f"Saved: {save_path}")
+    return save_path
 
 
 def copy_cached_test_if_exists(test_id: str, folder_name: str) -> bool:
-    """
-    If this test already exists in DATABASE_DIR, copy it to DOWNLOAD_DIR and
-    return True (meaning we can skip downloading). Otherwise False.
-    """
-    cached_test_dir = DATABASE_DIR / test_id
-    if not cached_test_dir.exists():
-        return False
-    
-    target_directory = DOWNLOAD_DIR / folder_name
-    if target_directory.exists():
-        return True
-    
-    print(f"Copying cached test {test_id} from database to working directory...")
-    shutil.copytree(str(cached_test_dir), str(target_directory))
-    return True
+    """
+    If this test already exists in DATABASE_DIR, copy it to DOWNLOAD_DIR and
+    return True (meaning we can skip downloading). Otherwise False.
+    """
+    cached_test_dir = DATABASE_DIR / test_id
+    if not cached_test_dir.exists():
+        return False
 
+    target_directory = DOWNLOAD_DIR / folder_name
+    if target_directory.exists():
+        return True
 
+    print(f"Copying cached test {test_id} from database to working directory...")
+    shutil.copytree(str(cached_test_dir), str(target_directory))
+    return True
 
 
 def mirror_test_to_cache(test_id: str, test_dir: Path):
-    """
-    Mirror the downloaded test folder into DATABASE_DIR, similar to the Selenium
-    script's caching behavior.
-    """
-    cache_target = DATABASE_DIR / test_id
-    cache_target.mkdir(parents=True, exist_ok=True)
-    
-    for item in test_dir.iterdir():
-        dest_path = cache_target / item.name
-        if item.is_file():
-            if not dest_path.exists():
-                shutil.copy2(str(item), str(dest_path))
-        elif item.is_dir():
-            if not dest_path.exists():
-                shutil.copytree(str(item), str(dest_path))
-            else:
-                # Merge contents into existing folder
-                for subitem in item.rglob("*"):
-                    if subitem.is_file():
-                        rel = subitem.relative_to(item)
-                        dest_sub = dest_path / rel
-                        dest_sub.parent.mkdir(parents=True, exist_ok=True)
-                        if not dest_sub.exists():
-                            shutil.copy2(str(subitem), str(dest_sub))
+    """
+    Mirror the downloaded test folder into DATABASE_DIR, similar to the Selenium
+    script's caching behavior.
+    """
+    cache_target = DATABASE_DIR / test_id
+    cache_target.mkdir(parents=True, exist_ok=True)
 
-
+    for item in test_dir.iterdir():
+        dest_path = cache_target / item.name
+        if item.is_file():
+            if not dest_path.exists():
+                shutil.copy2(str(item), str(dest_path))
+        elif item.is_dir():
+            if not dest_path.exists():
+                shutil.copytree(str(item), str(dest_path))
+            else:
+                # Merge contents into existing folder
+                for subitem in item.rglob("*"):
+                    if subitem.is_file():
+                        rel = subitem.relative_to(item)
+                        dest_sub = dest_path / rel
+                        dest_sub.parent.mkdir(parents=True, exist_ok=True)
+                        if not dest_sub.exists():
+                            shutil.copy2(str(subitem), str(dest_sub))
 
 
 def get_folders(page):
-    """
-    Recreate Selenium's folder-list filtering:
-    - Start from .folder-list anchors.
-    - Exclude EXCLUDE_KEYWORDS.
-    """
-    folder_list = page.locator(".folder-list")
-    folder_list.wait_for(state="visible")
-    
-    anchors = folder_list.locator("a")
-    count = anchors.count()
-    folders = []
-    
-    for i in range(count):
-        text = (anchors.nth(i).text_content() or "").strip()
-        if not text:
-            continue
-        if any(kw in text.lower() for kw in EXCLUDE_KEYWORDS):
-            continue
-        folders.append(text)
-    
-    return folders
+    """
+    Recreate Selenium's folder-list filtering:
+    - Start from .folder-list anchors.
+    - Exclude EXCLUDE_KEYWORDS.
+    """
+    folder_list = page.locator(".folder-list")
+    folder_list.wait_for(state="visible")
 
+    anchors = folder_list.locator("a")
+    count = anchors.count()
+    folders = []
 
+    for i in range(count):
+        text = (anchors.nth(i).text_content() or "").strip()
+        if not text:
+            continue
+        if any(kw in text.lower() for kw in EXCLUDE_KEYWORDS):
+            continue
+        folders.append(text)
+
+    return folders
 
 
 def is_excel_file(filename: str) -> bool:
-    """Check if filename has an Excel-like extension."""
-    lower = filename.lower()
-    return lower.endswith((".xls", ".xlsx", ".xlm", ".xlsm"))
-
-
+    """Check if filename has an Excel-like extension."""
+    lower = filename.lower()
+    return lower.endswith((".xls", ".xlsx", ".xlm", ".xlsm"))
 
 
 def download_folder(page, folder_name: str, target_directory: Path):
-    """
-    Click the given folder (e.g. 'Data\\Excel'), then download all Excel-like
-    files listed on that folder page.
-    """
-    print(f"Downloading folder: {folder_name}")
-    target_directory.mkdir(parents=True, exist_ok=True)
-    
-    # Click the folder (Data\Excel)
-    folder_link = page.get_by_text(folder_name, exact=True)
-    folder_link.click()
-    page.wait_for_load_state("networkidle")
-    
-    # Root container for files is <td class="file-list">
-    file_cell = page.locator("td.file-list")
-    file_cell.wait_for(state="visible")
-    
-    # 1) Bulk "Download all files in this folder" link (outside the UL)
-    bulk_link = file_cell.locator("a").filter(has_text="Download all files in this folder")
-    if bulk_link.count() > 0:
-        try:
-            save_download_from_click(page, bulk_link.first, target_directory)
-        except PlaywrightTimeoutError:
-            print(f"Timeout on 'Download all files' for {folder_name}, skipping.")
-        except Exception as e:
-            print(f"Error on 'Download all files' for {folder_name}: {e}")
-    
-    # 2) All individual Excel file links inside the UL
-    file_links = file_cell.locator("ul.AspNet-DataList td.filename a")
-    count = file_links.count()
-    print(f"Found {count} file links in '{folder_name}'")
-    
-    downloaded_count = 0
-    
-    for i in range(count):
-        link = file_links.nth(i)
-        text = (link.text_content() or "").strip()
-        
-        # Skip non-Excel files
-        if not is_excel_file(text):
-            print(f"Skipping non-Excel file link: {text}")
-            continue
-        
-        print(f"Downloading Excel file link: {text}")
-        
-        try:
-            save_download_from_click(page, link, target_directory)
-            downloaded_count += 1
-            # 3 second wait between downloads
-            time.sleep(3)
-        except PlaywrightTimeoutError:
-            print(f"Timeout downloading Excel link '{text}' in {folder_name}, skipping.")
-        except Exception as e:
-            print(f"Error downloading Excel link '{text}' in {folder_name}: {e}")
-    
-    if downloaded_count == 0:
-        print(
-            f"Warning: {target_directory} is empty after download. "
-            f"Excel file links may not match filters or IIHS returned no data."
-        )
+    """
+    Click the given folder (e.g. 'Data\\Excel'), then download all Excel-like
+    files listed on that folder page.
+    """
+    print(f"Downloading folder: {folder_name}")
+    target_directory.mkdir(parents=True, exist_ok=True)
 
+    # Click the folder (Data\Excel)
+    folder_link = page.get_by_text(folder_name, exact=True)
+    folder_link.click()
+    page.wait_for_load_state("networkidle")
 
+    # Root container for files is <td class="file-list">
+    file_cell = page.locator("td.file-list")
+    file_cell.wait_for(state="visible")
+
+    # 1) Bulk "Download all files in this folder" link (outside the UL)
+    bulk_link = file_cell.locator("a").filter(has_text="Download all files in this folder")
+    if bulk_link.count() > 0:
+        try:
+            save_download_from_click(page, bulk_link.first, target_directory)
+        except PlaywrightTimeoutError:
+            print(f"Timeout on 'Download all files' for {folder_name}, skipping.")
+        except Exception as e:
+            print(f"Error on 'Download all files' for {folder_name}: {e}")
+    '''
+    # 2) All individual Excel file links inside the UL
+    file_links = file_cell.locator("ul.AspNet-DataList td.filename a")
+    count = file_links.count()
+    print(f"Found {count} file links in '{folder_name}'")
+    '''
+    downloaded_count = 0
+
+    for i in range(count):
+        link = file_links.nth(i)
+        text = (link.text_content() or "").strip()
+
+        # Skip non-Excel files
+        if not is_excel_file(text):
+            print(f"Skipping non-Excel file link: {text}")
+            continue
+
+        print(f"Downloading Excel file link: {text}")
+
+        try:
+            save_download_from_click(page, link, target_directory)
+            downloaded_count += 1
+            # 3 second wait between downloads
+            time.sleep(3)
+        except PlaywrightTimeoutError:
+            print(f"Timeout downloading Excel link '{text}' in {folder_name}, skipping.")
+        except Exception as e:
+            print(f"Error downloading Excel link '{text}' in {folder_name}: {e}")
+
+    if downloaded_count == 0:
+        print(
+            f"Warning: {target_directory} is empty after download. "
+            f"Excel file links may not match filters or IIHS returned no data."
+        )
 
 
 def download_all_folders(page, target_directory: Path):
-    """Download all Excel folders from current page."""
-    folders = get_folders(page)
-    
-    for name in folders:
-        lower = name.lower()
-        # Only Excel folder; skip others like video, photos, diadem
-        if "excel" not in lower:
-            continue
-        
-        download_folder(page, name, target_directory)
+    """Download all Excel folders from current page."""
+    folders = get_folders(page)
 
+    for name in folders:
+        lower = name.lower()
+        # Only Excel folder; skip others like video, photos, diadem
+        if "excel" not in lower:
+            continue
 
+        download_folder(page, name, target_directory)
 
 
 def login(page):
-    """Login to IIHS TechData portal."""
-    page.goto("https://techdata.iihs.org/")
-    page.wait_for_load_state("networkidle")
-    page.get_by_text("Log in to IIHS TechData").click()
-    page.get_by_placeholder("Email Address").fill(USERNAME)
-    page.get_by_placeholder("Password").fill(PASSWORD)
-    page.get_by_role("button", name="Sign In").click()
-    page.wait_for_load_state("networkidle")
-    page.get_by_text("Continue to downloads").click()
-    page.wait_for_load_state("networkidle")
-
-
+    """Login to IIHS TechData portal."""
+    page.goto("https://techdata.iihs.org/")
+    page.wait_for_load_state("networkidle")
+    page.get_by_text("Log in to IIHS TechData").click()
+    page.get_by_placeholder("Email Address").fill(USERNAME)
+    page.get_by_placeholder("Password").fill(PASSWORD)
+    page.get_by_role("button", name="Sign In").click()
+    page.wait_for_load_state("networkidle")
+    page.get_by_text("Continue to downloads").click()
+    page.wait_for_load_state("networkidle")
 
 
 def select_dropdown(page, option_value=None, wait_time: int = 30):
-    """
-    Open dropdown for manual selection, or auto-select if option provided.
-    """
-    page.wait_for_load_state("networkidle")
-    
-    test_dropdown = page.locator("#ctl00_MainContentPlaceholder_TestTypeDropdown")
-    test_dropdown.wait_for(state='visible')
-    
-    if option_value:
-        # Auto-select
-        test_dropdown.select_option(option_value)
-    else:
-        # Just click to open dropdown for manual selection
-        test_dropdown.click()
-        print(f"⏳ Waiting {wait_time} seconds for manual selection")
-        time.sleep(wait_time)
-    
-    search_button = page.locator("#ctl00_MainContentPlaceholder_SearchButton")
-    search_button.wait_for(state='visible')
-    search_button.click()
-    
-    page.wait_for_load_state("networkidle")
+    """
+    Open dropdown for manual selection, or auto-select if option provided.
+    """
+    page.wait_for_load_state("networkidle")
 
+    test_dropdown = page.locator("#ctl00_MainContentPlaceholder_TestTypeDropdown")
+    test_dropdown.wait_for(state='visible')
 
+    if option_value:
+        # Auto-select
+        test_dropdown.select_option(option_value)
+    else:
+        # Just click to open dropdown for manual selection
+        test_dropdown.click()
+        print(f"⏳ Waiting {wait_time} seconds for manual selection")
+        time.sleep(wait_time)
+
+    search_button = page.locator("#ctl00_MainContentPlaceholder_SearchButton")
+    search_button.wait_for(state='visible')
+    search_button.click()
+
+    page.wait_for_load_state("networkidle")
 
 
 # --- Per-page and per-test processing ---
 
 
+def go_to_results_page(page, results_url: str):
+    """
+    Navigate to the search results page reliably.
+    Instead of using page.go_back(), we explicitly goto the stored results URL.
+    """
+    if page.url != results_url:
+        page.goto(results_url)
+        page.wait_for_load_state("networkidle")
+    # Ensure we’re really on the results page
+    page.wait_for_load_state("networkidle")
 
 
-def process_current_page(page):
-    """
-    Process all test links on current page (SER, LSCT, CF, CEF, CES, HSE, CN, CEP, 
-    SWR, AEB, FCP, VRU, NVRU, LAT, SBR, BSE, LSC).
+def process_current_page(page, results_url: str, seen_test_ids: set) -> str:
+    """
+    Process all test links on current page (SER, LSCT, CF, CEF, CES, HSE, CN, CEP, 
+    SWR, AEB, FCP, VRU, NVRU, LAT, SBR, BSE, LSC).
 
+    Args:
+        page: Playwright page object.
+        results_url: Stable URL of the current search results page.
+        seen_test_ids: Set of test IDs already processed in this run.
 
-    Returns:
-        - "continue"  : Finished this page normally; caller should go to next page via dropdown.
-        - "next_page" : 3+ consecutive duplicates found; caller should click Next button and reprocess.
-        - "done"      : No more new tests; signal that we are completely done.
-    """
-    
-    # All test ID prefixes to match
-    TEST_PREFIXES = [
-        "SER", "LSCT", "CF", "CEF", "CES", "HSE", "CN", "CEP", 
-        "SWR", "AEB", "FCP", "VRU", "NVRU", "LAT", "SBR", "BSE", "LSC"
-    ]
-    
-    # Build locator that matches any of the prefixes
-    all_links = page.locator("a")
-    count = all_links.count()
-    
-    # Filter to only test links (containing any of the prefixes)
-    test_link_indices = []
-    for i in range(count):
-        link_text = (all_links.nth(i).text_content() or "").strip()
-        if any(prefix in link_text for prefix in TEST_PREFIXES):
-            test_link_indices.append(i)
-    
-    print(f"Tests found on this page: {len(test_link_indices)}")
-    
-    if len(test_link_indices) == 0:
-        # No test links found at all on this page → consider done
-        return "done"
-    
-    consecutive_duplicates = 0
-    
-    for i in tqdm(range(len(test_link_indices)), desc="Tests on current page"):
-        # Get the actual index from our filtered list
-        link_idx = test_link_indices[i]
-        link = all_links.nth(link_idx)
-        raw_link_text = (link.text_content() or "").strip()
-        print(f"Processing link {i}: {raw_link_text}")
-        
-        try:
-            with page.expect_navigation(timeout=30000):
-                link.click()
-        except PlaywrightTimeoutError:
-            link.click()
-            page.wait_for_load_state("load")
-        
-        h2_element = page.locator("h2").first
-        raw_string = h2_element.text_content()
-        print(f"Extracted text: {raw_string}")
-        
-        test_id, remaining_text = parse_test_title(raw_string)
-        if not test_id:
-            print("Could not parse expected 'Test ID' format; going back.")
-            page.go_back()
-            page.wait_for_load_state("networkidle")
-            # Unparseable test: treat as non-duplicate for robustness
-            consecutive_duplicates = 0
-            continue
-        
-        folder_name = f"{test_id}- {remaining_text}"
-        test_dir = DOWNLOAD_DIR / folder_name
-        test_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Created folder at: {test_dir.resolve()}")
-        
-        if copy_cached_test_if_exists(test_id, folder_name):
-            print(f"Using cached data for test {test_id}")
-            consecutive_duplicates += 1
-            print(f"Consecutive duplicates: {consecutive_duplicates}")
-            
-            # If we've seen 3+ duplicates in a row, move to next page via Next button
-            if consecutive_duplicates >= 3:
-                print("Three consecutive duplicates detected; going to next page.")
-                page.go_back()
-                page.wait_for_load_state("networkidle")
-                return "next_page"
-            
-            page.go_back()
-            page.wait_for_load_state("networkidle")
-            continue
-        
-        # New (non-cached) test: reset duplicate counter
-        consecutive_duplicates = 0
-        
-        try:
-            download_all_folders(page, test_dir)
-        except Exception as e:
-            print(f"Folder download failed for {folder_name}: {e}")
-        
-        mirror_test_to_cache(test_id, test_dir)
-        
-        page.go_back()
-        page.wait_for_load_state("networkidle")
-    
-    # Processed all tests on this page without triggering next_page/done
-    return "continue"
+    Returns:
+        - "continue"  : Finished this page normally; caller should go to next page via dropdown.
+        - "next_page" : 3+ consecutive duplicates found; caller should click Next button and reprocess.
+        - "done"      : No more new tests; signal that we are completely done.
+    """
 
+    # All test ID prefixes to match
+    TEST_PREFIXES = [
+        "SER", "LSCT", "CF", "CEF", "CES", "HSE", "CN", "CEP",
+        "SWR", "AEB", "FCP", "VRU", "NVRU", "LAT", "SBR", "BSE", "LSC"
+    ]
 
+    # Build locator that matches any of the prefixes
+    all_links = page.locator("a")
+    count = all_links.count()
+
+    # Filter to only test links (containing any of the prefixes)
+    test_link_indices = []
+    for i in range(count):
+        link_text = (all_links.nth(i).text_content() or "").strip()
+        if any(prefix in link_text for prefix in TEST_PREFIXES):
+            test_link_indices.append(i)
+
+    print(f"Tests found on this page: {len(test_link_indices)}")
+
+    if len(test_link_indices) == 0:
+        # No test links found at all on this page → consider done
+        return "done"
+
+    consecutive_duplicates = 0
+
+    for i in tqdm(range(len(test_link_indices)), desc="Tests on current page"):
+        # Get the actual index from our filtered list
+        link_idx = test_link_indices[i]
+        link = all_links.nth(link_idx)
+        raw_link_text = (link.text_content() or "").strip()
+        print(f"Processing link {i}: {raw_link_text}")
+
+        try:
+            with page.expect_navigation(timeout=30000):
+                link.click()
+        except PlaywrightTimeoutError:
+            link.click()
+            page.wait_for_load_state("load")
+
+        h2_element = page.locator("h2").first
+        raw_string = h2_element.text_content()
+        print(f"Extracted text: {raw_string}")
+
+        test_id, remaining_text = parse_test_title(raw_string)
+        if not test_id:
+            print("Could not parse expected 'Test ID' format; going back.")
+            # Use explicit navigation instead of go_back()
+            go_to_results_page(page, results_url)
+            # Unparseable test: treat as non-duplicate for robustness
+            consecutive_duplicates = 0
+            continue
+
+        folder_name = f"{test_id}- {remaining_text}"
+        test_dir = DOWNLOAD_DIR / folder_name
+        test_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Created folder at: {test_dir.resolve()}")
+
+        # Check if we've already processed this test ID in this run
+        already_seen_in_run = test_id in seen_test_ids
+
+        # Check if we have a cached copy on disk
+        has_cached_copy = copy_cached_test_if_exists(test_id, folder_name)
+
+        if already_seen_in_run or has_cached_copy:
+            # Treat as a duplicate for pagination logic
+            consecutive_duplicates += 1
+            print(f"Duplicate test {test_id} (seen_in_run={already_seen_in_run}, cached={has_cached_copy})")
+            print(f"Consecutive duplicates: {consecutive_duplicates}")
+
+            # Return to results page using explicit navigation
+            go_to_results_page(page, results_url)
+
+            # If we've seen 3+ duplicates in a row, move to next page via Next button
+            if consecutive_duplicates >= 3:
+                print("Three consecutive duplicates detected; going to next page.")
+                return "next_page"
+
+            continue
+
+        # New (non-cached, not seen in this run) test: reset duplicate counter
+        consecutive_duplicates = 0
+        seen_test_ids.add(test_id)
+
+        try:
+            download_all_folders(page, test_dir)
+        except Exception as e:
+            print(f"Folder download failed for {folder_name}: {e}")
+
+        mirror_test_to_cache(test_id, test_dir)
+
+        # Return to results page using explicit navigation, not go_back()
+        go_to_results_page(page, results_url)
+
+    # Processed all tests on this page without triggering next_page/done
+    return "continue"
 
 
 # --- Main entry point ---
 
 
-
-
 def main():
-    # Initialize paths and credentials
-    initialize_paths()
-    
-    if not USERNAME or not PASSWORD:
-        raise ValueError("Missing USER or PASS")
-    
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=False,
-            downloads_path=str(DOWNLOAD_DIR),
-        )
-        context = browser.new_context(accept_downloads=True)
-        page = context.new_page()
-        
-        login(page)
-        select_dropdown(page)  # Manual selection mode
-        
-        # Initial check: is there anything to process on the first page?
-        status = process_current_page(page)
-        
-        while True:
-            if status == "done":
-                print("Done downloading tests")
-                break
-            
-            if status == "next_page":
-                # Try to click the Next button
-                next_button = page.locator("#ctl00_MainContentPlaceholder_PageSelector_btnNextPage")
-                
-                # Check if next button actually exists and is enabled
-                if not next_button.count() or not next_button.first.is_enabled():
-                    print("No next page available. Done downloading tests")
-                    break
-                
-                try:
-                    next_button.first.click()
-                    page.wait_for_load_state("networkidle")
-                except Exception:
-                    print("Failed to navigate to next page. Done downloading tests")
-                    break
-                
-                # Reprocess from the top of the new page
-                status = process_current_page(page)
-                continue
-            
-            if status == "continue":
-                # Use the dropdown page selector to go to the next page (original behavior)
-                page_selector = page.locator("#ctl00_MainContentPlaceholder_PageSelector_ddPages")
-                options = page_selector.locator("option")
-                num_pages = options.count()
-                
-                # Get current selected value
-                current_val = page_selector.evaluate("el => el.value")
-                
-                # Find index of current value
-                option_values = [options.nth(i).get_attribute("value") for i in range(num_pages)]
-                try:
-                    current_idx = option_values.index(current_val)
-                except ValueError:
-                    print("Could not determine current page index. Done downloading tests")
-                    break
-                
-                if current_idx >= num_pages - 1:
-                    print("Already on last page. Done downloading tests")
-                    break
-                
-                # Move to next page via dropdown
-                next_val = option_values[current_idx + 1]
-                page_selector.select_option(next_val)
-                page.wait_for_load_state("networkidle")
-                
-                status = process_current_page(page)
-                continue
-        
-        context.close()
-        browser.close()
+    # Initialize paths and credentials
+    initialize_paths()
 
+    if not USERNAME or not PASSWORD:
+        raise ValueError("Missing USER or PASS")
 
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=False,
+            downloads_path=str(DOWNLOAD_DIR),
+        )
+        context = browser.new_context(accept_downloads=True)
+        page = context.new_page()
+
+        login(page)
+        select_dropdown(page)  # Manual selection mode
+
+        # After search completes, capture the stable results URL
+        page.wait_for_load_state("networkidle")
+        results_url = page.url
+        print(f"Results URL captured: {results_url}")
+
+        # Track test IDs seen in this run
+        seen_test_ids = set()
+
+        # Initial check: is there anything to process on the first page?
+        status = process_current_page(page, results_url, seen_test_ids)
+
+        while True:
+            if status == "done":
+                print("Done downloading tests")
+                break
+
+            if status == "next_page":
+                # Try to click the Next button
+                next_button = page.locator("#ctl00_MainContentPlaceholder_PageSelector_btnNextPage")
+
+                # Check if next button actually exists and is enabled
+                if not next_button.count() or not next_button.first.is_enabled():
+                    print("No next page available. Done downloading tests")
+                    break
+
+                try:
+                    next_button.first.click()
+                    page.wait_for_load_state("networkidle")
+                    # Update results_url after moving to next page
+                    results_url = page.url
+                    print(f"Moved to next page; new results URL: {results_url}")
+                except Exception:
+                    print("Failed to navigate to next page. Done downloading tests")
+                    break
+
+                # Reprocess from the top of the new page
+                status = process_current_page(page, results_url, seen_test_ids)
+                continue
+
+            if status == "continue":
+                # Use the dropdown page selector to go to the next page (original behavior)
+                page_selector = page.locator("#ctl00_MainContentPlaceholder_PageSelector_ddPages")
+                options = page_selector.locator("option")
+                num_pages = options.count()
+
+                # Get current selected value
+                current_val = page_selector.evaluate("el => el.value")
+
+                # Find index of current value
+                option_values = [options.nth(i).get_attribute("value") for i in range(num_pages)]
+                try:
+                    current_idx = option_values.index(current_val)
+                except ValueError:
+                    print("Could not determine current page index. Done downloading tests")
+                    break
+
+                if current_idx >= num_pages - 1:
+                    print("Already on last page. Done downloading tests")
+                    break
+
+                # Move to next page via dropdown
+                next_val = option_values[current_idx + 1]
+                page_selector.select_option(next_val)
+                page.wait_for_load_state("networkidle")
+
+                # Update results_url after moving to next page
+                results_url = page.url
+                print(f"Moved to next page via dropdown; new results URL: {results_url}")
+
+                status = process_current_page(page, results_url, seen_test_ids)
+                continue
+
+        context.close()
+        browser.close()
 
 
 if __name__ == "__main__":
-    main() 
+    main()
